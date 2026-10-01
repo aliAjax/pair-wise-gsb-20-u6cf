@@ -1,160 +1,129 @@
+import { useAcceptance } from "./data/useAcceptance";
+import { CentralConsole } from "./ui/CentralConsole";
+import { OfflineEntryForm } from "./ui/OfflineEntryForm";
+import { PipelineBoard } from "./ui/PipelineBoard";
+import { SnapshotPanel } from "./ui/SnapshotPanel";
+import { VersionsPanel } from "./ui/VersionsPanel";
 import "./styles.css";
 
-const project = {
-  "id": "hxwl-06",
-  "port": 5106,
-  "title": "显微镜玻片观察",
-  "subtitle": "样本、多倍率视野与染色观察记录库",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#4338ca",
-    "#0d9488",
-    "#db2777"
-  ],
-  "domain": "生物显微观察",
-  "users": [
-    "实验课教师",
-    "学生",
-    "实验管理员"
-  ],
-  "metrics": [
-    "样本数",
-    "视野记录",
-    "染色方法",
-    "重点结构"
-  ],
-  "filters": [
-    "植物组织",
-    "动物组织",
-    "微生物",
-    "血液涂片"
-  ],
-  "fields": [
-    "样本名称",
-    "样本类型",
-    "染色方式",
-    "放大倍数",
-    "观察结构",
-    "视野描述"
-  ],
-  "records": [
-    [
-      "洋葱表皮",
-      "植物组织",
-      "碘液",
-      "400x",
-      "细胞壁清晰，细胞核可见"
-    ],
-    [
-      "人血涂片",
-      "血液涂片",
-      "瑞氏染色",
-      "1000x",
-      "红细胞分布均匀"
-    ],
-    [
-      "草履虫",
-      "微生物",
-      "活体观察",
-      "200x",
-      "纤毛运动明显"
-    ]
-  ]
-};
-
-const statusColors = ["status-ok", "status-watch", "status-danger"];
-
-function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
-  return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i className={statusColors[index % statusColors.length]} />
-    </article>
-  );
-}
-
 function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
+  const { ws, online, busy, toast, setToast, actions } = useAcceptance();
+
+  const counts = {
+    draft: ws.records.filter((r) => r.status === "draft").length,
+    queue: ws.records.filter((r) => r.status === "queued" || r.status === "submitted").length,
+    review: ws.records.filter((r) => r.status === "in_review" || r.status === "rejected").length,
+    accepted: ws.records.filter((r) => r.status === "accepted").length,
+  };
+  const pendingOutbox = ws.outbox.filter(
+    (e) => e.state === "pending" || e.state === "in_flight" || e.state === "error",
+  ).length;
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-06 · 玻片验收追溯流程</p>
+          <h1>显微镜玻片观察与验收</h1>
+          <p className="subtitle">
+            样本 → 观察记录（离线补录）→ 回网按玻片编号核对中心回执 → 待核区列双方值 →
+            染色批次/标尺版本有效 → 已验收快照。编号占用仲裁与分阶段写入保证只放行一条、中断可续传。
+          </p>
         </div>
         <div className="stack-card">
-          <span>技术栈</span>
-          <strong>{project.stack}</strong>
+          <span className={`net-dot ${online ? "on" : "off"}`}>
+            {online ? "● 已回网" : "○ 离线模式"}
+          </span>
+          <strong>
+            队列待处理 {pendingOutbox} 条
+            {!online && "（回网后可核对）"}
+          </strong>
+          <div className="hero-actions">
+            <button
+              className="primary-action"
+              onClick={actions.sync}
+              disabled={busy || pendingOutbox === 0}
+              title="处理发送队列：编号仲裁 + 回执核对"
+            >
+              {busy ? "处理中…" : "回网核对队列"}
+            </button>
+            <button onClick={actions.resetDemo} disabled={busy}>
+              重置演示数据
+            </button>
+          </div>
         </div>
       </section>
 
+      {toast && (
+        <div className="toast" onClick={() => setToast(undefined)}>
+          {toast}
+          <span className="toast-close">×</span>
+        </div>
+      )}
+
       <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
-        ))}
+        <article className="metric-card">
+          <span>离线草稿</span>
+          <strong>{counts.draft}</strong>
+          <i className="status-neutral" />
+        </article>
+        <article className="metric-card">
+          <span>队列 / 待回执</span>
+          <strong>{counts.queue}</strong>
+          <i className="status-watch" />
+        </article>
+        <article className="metric-card">
+          <span>待核区</span>
+          <strong>{counts.review}</strong>
+          <i className="status-danger" />
+        </article>
+        <article className="metric-card">
+          <span>已验收</span>
+          <strong>{counts.accepted}</strong>
+          <i className="status-ok" />
+        </article>
       </section>
 
-      <section className="workspace">
-        <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
-          </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
-            ))}
-          </div>
-        </aside>
+      <section className="entry-section panel">
+        <OfflineEntryForm
+          stains={ws.stains}
+          scales={ws.scales}
+          disabled={busy}
+          onSubmit={actions.registerAndObserve}
+        />
+      </section>
 
+      <PipelineBoard
+        ws={ws}
+        actions={{
+          queue: actions.queue,
+          recheck: actions.recheck,
+          recompute: actions.recompute,
+          bumpStain: actions.bumpStain,
+          bumpScale: actions.bumpScale,
+          injectFault: actions.injectFault,
+        }}
+      />
+
+      <SnapshotPanel ws={ws} onBuild={actions.snapshot} />
+
+      <section className="bottom-grid">
         <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
-            </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
+          <VersionsPanel ws={ws} onBumpStain={actions.bumpStain} onBumpScale={actions.bumpScale} />
+        </section>
+        <section className="panel">
+          <CentralConsole
+            ws={ws}
+            onUpsertReceipt={actions.upsertReceipt}
+            onReleaseClaim={actions.releaseClaim}
+          />
         </section>
       </section>
 
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
-        </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <footer className="foot-note">
+        数据保存在浏览器 IndexedDB（离线可补录、中断可恢复）；中心回执台用于联调演示，真实部署替换
+        <code>src/domain/central.ts</code> 中两个方法为中心实验室 API 即可。
+      </footer>
     </main>
   );
 }
