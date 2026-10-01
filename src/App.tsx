@@ -1,162 +1,83 @@
 import "./styles.css";
+import { StoreProvider, useStore } from "./state/store";
+import { Toolbar } from "./components/Toolbar";
+import { EntryForm } from "./components/EntryForm";
+import { DependencyPanel } from "./components/DependencyPanel";
+import { RecordsBoard } from "./components/RecordsBoard";
+import { SnapshotList } from "./components/SnapshotList";
+import { SyncLog } from "./components/SyncLog";
 
-const project = {
-  "id": "hxwl-06",
-  "port": 5106,
-  "title": "显微镜玻片观察",
-  "subtitle": "样本、多倍率视野与染色观察记录库",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#4338ca",
-    "#0d9488",
-    "#db2777"
-  ],
-  "domain": "生物显微观察",
-  "users": [
-    "实验课教师",
-    "学生",
-    "实验管理员"
-  ],
-  "metrics": [
-    "样本数",
-    "视野记录",
-    "染色方法",
-    "重点结构"
-  ],
-  "filters": [
-    "植物组织",
-    "动物组织",
-    "微生物",
-    "血液涂片"
-  ],
-  "fields": [
-    "样本名称",
-    "样本类型",
-    "染色方式",
-    "放大倍数",
-    "观察结构",
-    "视野描述"
-  ],
-  "records": [
-    [
-      "洋葱表皮",
-      "植物组织",
-      "碘液",
-      "400x",
-      "细胞壁清晰，细胞核可见"
-    ],
-    [
-      "人血涂片",
-      "血液涂片",
-      "瑞氏染色",
-      "1000x",
-      "红细胞分布均匀"
-    ],
-    [
-      "草履虫",
-      "微生物",
-      "活体观察",
-      "200x",
-      "纤毛运动明显"
-    ]
-  ]
-};
-
-const statusColors = ["status-ok", "status-watch", "status-danger"];
-
-function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
+function Metrics() {
+  const { state } = useStore();
+  const cards = [
+    { label: "观察记录", value: state.records.length },
+    { label: "待核区", value: state.records.filter((r) => r.state === "pending_check").length },
+    {
+      label: "结论失效待重算",
+      value: state.records.filter((r) => r.measurement?.calcStatus === "stale" && !r.snapshotId)
+        .length,
+    },
+    { label: "已验收快照", value: state.snapshots.length },
+  ];
   return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i className={statusColors[index % statusColors.length]} />
-    </article>
+    <section className="metrics-grid">
+      {cards.map((c, i) => (
+        <article key={c.label} className="metric-card">
+          <span>{c.label}</span>
+          <strong>{c.value}</strong>
+          <i className={["status-ok", "status-watch", "status-danger", "status-ok"][i]} />
+        </article>
+      ))}
+    </section>
   );
 }
 
-function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
-
+function Shell() {
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-06 · 玻片镜检可追溯验收流程</p>
+          <h1>样本 · 观察记录 · 中心回执 · 染色批次 全链路核对</h1>
+          <p className="subtitle">
+            镜检员离线补录，回网后按玻片编号核对中心实验室接收回执；拒收、编号被占用或双方值不符的记录停在待核区；
+            染色批次或标尺升版后测量结论失效待重算，未重算不得进入不可变的已验收快照。
+          </p>
         </div>
         <div className="stack-card">
-          <span>技术栈</span>
-          <strong>{project.stack}</strong>
+          <span>持久化与并发</span>
+          <strong>IndexedDB 本地库 · 顺序同步逐条落库 · 中心原子占位 + 幂等重放</strong>
         </div>
       </section>
 
-      <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
-        ))}
-      </section>
+      <Metrics />
+      <Toolbar />
 
       <section className="workspace">
-        <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
-          </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
-            ))}
-          </div>
-        </aside>
-
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
-            </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
-
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
+        <div className="side-col">
+          <DependencyPanel />
         </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
+        <div className="main-col">
+          <EntryForm />
         </div>
       </section>
+
+      <RecordsBoard />
+      <SnapshotList />
+      <SyncLog />
+
+      <footer className="page-foot">
+        追溯链：样本 → 观察记录（含依赖版本） → 中心回执（编号核对） → 已验收快照（不可变）。
+        刷新或关闭页面后从 IndexedDB 恢复，已完成条目不丢、不重复，只重试未完成部分。
+      </footer>
     </main>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <StoreProvider>
+      <Shell />
+    </StoreProvider>
+  );
+}
